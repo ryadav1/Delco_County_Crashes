@@ -20,12 +20,20 @@ library(ggplot2)
 library(readr)
 library(dplyr)
 library(forcats)
+library(viridis)
+library(ggthemes)
 
 #Load the dataset
 crash_del <- read_csv("~/DataScience/Statistics/Data/crash_del.csv")
+#Load uninsured dataset
+Uninsured_PA <- read_csv("~/DataScience/Statistics/Data/Uninsured_PA.csv")
+
+#Fix column names
+names(Uninsured_PA) <- gsub(" ", "", names(Uninsured_PA))
+names(Uninsured_PA) <- gsub("-", "", names(Uninsured_PA))
 ```
 
-We will use data on all reported crashes in Delaware County for 2016.  These data are provided by the Pennsylvania Department of Transportation.  Information the various variables can be found at this [link](https://data.pa.gov/Public-Safety/Crash-Data-1997-to-Current-Transportation/dc5b-gebx).
+We will use data on all reported crashes in Delaware County for 2016.  These data are provided by the Pennsylvania Department of Transportation.  Information the various variables can be found at this [link](https://data.pa.gov/Public-Safety/Crash-Data-1997-to-Current-Transportation/dc5b-gebx). We will also use data on uninsured rates in PA.  Information regarding the various variables can be found at this [link](https://data.pa.gov/Human-Services/Uninsured-Population-Census-Data-CY-2009-2014-Huma/s782-mpqp).
 
 First of all, let's try to understand the frequency of the different types of collisions (`Collision.Type`).
 
@@ -161,6 +169,175 @@ ggplot(crash_del, aes(x = Total.Injury.Count, y = Maximum.Severity.Level, fill =
 Three variables are Total.Injury.Count (number of people getting injured in accidents), Maximun.Severity.Level (injury severity level; larger number implies more severe injury) and Wet.Road (whether the roads are wet or not). I would expect people to drive slowly when the road is wet. Hence, if an accident occurs less number of people are injured and their injury severity level is from small to severe; however, most people are not severely injured. When the road is not wet, people drive faster and might speed at times, resulting into more number of people getting more severely injured. 
 
 *********************************************************************************
+
+Let's explore the locations of crashes in Delware County.
+
+```{r}
+ggplot(crash_del, aes(x = Longitude..Decimal., y = Latitude..Decimal.)) +
+      geom_point(alpha = 0.2, color = "mediumpurple3") +
+      labs(title = "Scatterplot of locations of crashes in Delaware County", 
+           caption = "Data Source: Pennsylvania Department of Transportation",
+           x = "Longitude", y = "Latitute")
+```
+
+Let's create a heatmap. 
+
+```{r}
+ggplot(crash_del, aes(x = Longitude..Decimal., y = Latitude..Decimal.)) +
+    geom_point(alpha = 0.2, color = "mediumpurple3") +
+    labs(title = "Heatmap of locations of crashes in Delaware County", 
+          caption = "Data Source: Pennsylvania Department of Transportation",
+          x = "Longitude", y = "Latitute") + 
+    geom_hex() +
+    scale_fill_viridis()
+      
+
+```
+
+Let's re-create the scatterplot and heatmap but this time point out where Swarthmore, PA is located.
+
+```{r}
+swarthmore <- filter(crash_del, Municipality.Name=="Swarthmore Boro") %>%
+  select(Longitude..Decimal., Latitude..Decimal.)
+swarthmore
+```
+
+
+```{r}
+ggplot(crash_del, aes(x = Longitude..Decimal., y = Latitude..Decimal.)) +
+    geom_point(alpha = 0.2, color = "mediumpurple3") +
+    geom_point(data = swarthmore, aes(x = Longitude..Decimal., y = Latitude..Decimal.), color = "red", size = 1) +
+    labs(title = "Scatterplot of locations of crashes in Delaware County",
+         subtitle = "Red represents where Swarthmore is located",
+         caption = "Data Source: Pennsylvania Department of Transportation",
+          x = "Longitude", y = "Latitute") 
+
+```
+
+
+```{r}
+ggplot(crash_del, aes(x = Longitude..Decimal., y = Latitude..Decimal.)) +
+    geom_hex() +
+    geom_point(data = swarthmore, aes(x = Longitude..Decimal., y = Latitude..Decimal.), color = "red", size = 1) +
+    labs(title = "Heatmap of locations of crashes in Delaware County", 
+         caption = "Data Source: Pennsylvania Department of Transportation; red represents where Swarthmore is located",
+          x = "Longitude", y = "Latitute") +
+    scale_fill_viridis()
+```
+
+The crashes seem to be clumping around the I-95 and I-476 highways which pass through the delaware county. The scatterplot with heatmap gives us a better sense of where the crashes are occuring. 
+
+*********************************************************************************
+
+Let's customize and add context to the graphic we created earlier. Recall that we created a faceted density plot of the distribution of accidents over the hours of the day by whether or not it was alcohol related.  
+
+```{r}
+crash_del$Hour.of.Day <- as.integer(crash_del$Hour.of.Day)
+crash_del <- filter(crash_del, Hour.of.Day != "99")
+ggplot(crash_del, aes(x = Hour.of.Day, fill = Alcohol.Related)) +
+  geom_density(alpha = 0.4) +
+  labs(title = "Distribution of accidents over the hours of the day", x = "Hours of Day", y = "Density") +
+  annotate("segment", x = 5, xend = 7.7, y = 0.075,
+  yend = 0.057, colour = "mediumorchid", size = 2, alpha = .6,
+  arrow = arrow()) + annotate("segment", x = 19,
+  xend = 17, y = 0.094, yend = 0.085, colour = "mediumorchid",
+  size = 2, alpha = 0.6, arrow = arrow()) + annotate("text",
+  x = 5, y = 0.08, label = c("Morning Commute"),
+  color = "plum3", size = 5) + annotate("text", x = 20,
+  y = 0.1, label = c("Afternoon Commute"), color = "plum3",
+  size = 5) +
+  theme_economist()
+```
+
+Let's look at the relationship between household income and the percentage of the county that is uninsured.  
+
+```{r}
+Uninsured_PA <-  mutate(Uninsured_PA, UninsuredPercent = Uninsured/Population)
+```
+
+*********************************************************************************
+
+We are computing a new column called UninsuredPercent by dividing the Uninsured with the Population. We are then appending this new column to Uninsured_PA. 
+
+*********************************************************************************
+
+Let's create a scatterplot.  Include a smoother and the county names.  
+
+```{r}
+ggplot(Uninsured_PA, aes(x = HouseholdIncome, y = UninsuredPercent)) + 
+  geom_point(color = "darkolivegreen3") +
+  geom_text(aes(label = County)) +
+  geom_smooth() +
+  labs(title = "Relationship between household income and the percentage
+  of the county that is uninsured", subtitle = "Data Provided by
+  Small Area Health Insurance Estimates Program, U.S. Census Bureau") +
+  theme_economist_white()
+```
+
+
+*********************************************************************************
+
+The relationship between the variables is difficult to tell from the graph above. Many counties are concentrated in the low income household distribution with 9-12 percentage of uninsured population. The curve is skewed and it looks like, in general, population with higher household income has lower uninsured percentage.
+
+Philadelphia and Allegheny seem to be the outlier. We see extremely high income level for Philadelphia and Allegheny; moreoever, Philadelphia has a high uninsured rate. I think the sample might not have been taken randomly for Philadelphia or there is some mistake in entering the data for household income for Philadelphia in the dataset. Lancaster seems to be a rich county based on the household income, however it does have a high insured rate (>12%). 
+
+*********************************************************************************
+
+Recreate the scatterplot but this time modify the scale of the axes so that the outliers are not outlying.
+
+```{r}
+ggplot(Uninsured_PA, aes(x = HouseholdIncome, y = UninsuredPercent)) + 
+  geom_point(color = "darkolivegreen3") +
+  geom_text(aes(label = County)) +
+  geom_smooth(se = FALSE) +
+  xlim(0, 500000) +
+  ylim(0.06, 0.13) +
+  labs(title = "Relationship between household income and the percentage
+  of the county that is uninsured", caption = "Data Provided by
+  Small Area Health Insurance Estimates Program, U.S. Census Bureau") +
+  theme_economist_white() 
+  
+```
+
+We can also transform the coordinate system instead of the scale using the following layer.  Let's modify the graph so that we are transforming the coordinate system instead of the scale.
+
+```{r, eval=TRUE}
+ggplot(Uninsured_PA, aes(x = HouseholdIncome, y = UninsuredPercent)) + 
+  geom_point(color = "darkolivegreen3") +
+  geom_text(aes(label = County)) +
+  geom_smooth(se = FALSE) +
+  labs(title = "Relationship between household income and the percentage
+  of the county that is uninsured", caption = "Data Provided by
+  Small Area Health Insurance Estimates Program, U.S. Census Bureau") +
+  theme_economist_white() +
+  coord_trans(x = "log10")
+
+```
+
+
+*********************************************************************************
+
+The above graph has x-axis with a logarithmic scale, so the values we see are the $\log_{10}()$ values of the household income whereas in the graph before that, the household income refers to the actual household income. Taking $\log_{10}()$ of the household income distribution distributes the x-coordinates more evenly compared to the one without logarithmic x-axis.
+
+*********************************************************************************
+
+
+```{r}
+ggplot(crash_del, aes(x = Vehicle.Count, y = Maximum.Severity.Level, fill = Crash.Month)) + 
+  geom_violin() +
+  facet_grid(. ~ Crash.Month) +
+  theme(strip.text.x = element_text(size = 8, angle = 90))+
+  labs(title = "Don't drive in Delaware County in July?")
+
+```
+
+
+*********************************************************************************
+
+From the above plot, we can clearly see that July stands out as the month in which the highest number of vehicle accidents occur and people get severely injured in those accidents. Similarly, December and May seem to have the lowest number of vehicle accidents. In each month, there are vehicle accidents ranging from the least severe to the most severe. 
+
+*********************************************************************************
+
 
 
 
